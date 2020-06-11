@@ -640,6 +640,7 @@ enum ieee80211_phymode ieee80211_chan2mode(struct ieee80211com *,
 void	ieee80211_disable_wep(struct ieee80211com *); 
 void	ieee80211_disable_rsn(struct ieee80211com *); 
 int	ieee80211_add_ess(struct ieee80211com *, struct ieee80211_join *);
+void    ieee80211_print_ess_list(struct ieee80211com *);
 void	ieee80211_del_ess(struct ieee80211com *, char *, int, int);
 void	ieee80211_set_ess(struct ieee80211com *, struct ieee80211_ess *,
 	    struct ieee80211_node *);

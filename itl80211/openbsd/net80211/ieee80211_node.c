@@ -55,6 +55,8 @@
 #include <sys/sysctl.h>
 #include <sys/tree.h>
 
+#include <os/log.h>
+
 #include <net/if.h>
 #include <net/if_dl.h>
 #include <net/if_media.h>
@@ -217,6 +219,7 @@ ieee80211_del_ess(struct ieee80211com *ic, char *nwid, int len, int all)
         }
         if (all == 1 || (ess->esslen == len &&
                          memcmp(ess->essid, nwid, len) == 0)) {
+            os_log(OS_LOG_DEFAULT, "Got in all code");
             TAILQ_REMOVE(&ic->ic_ess, ess, ess_next);
             explicit_bzero(ess, sizeof(*ess));
             IOFree(ess, sizeof(*ess));

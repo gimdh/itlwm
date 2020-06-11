@@ -13,11 +13,16 @@
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
 */
+#pragma once
+
 #include "compat.h"
 #include "itlhdr.h"
 #include "kernel.h"
 
 #include "itlwm_interface.hpp"
+#include <Commands.h>
+#include <sys/kern_control.h>
+#include <sys/kernel_types.h>
 #include <IOKit/network/IOEthernetController.h>
 #include <IOKit/IOWorkLoop.h>
 #include "IOKit/network/IOGatedOutputQueue.h"
@@ -376,6 +381,8 @@ public:
     static void    iwm_init_task(void *);
     int    iwm_activate(struct iwm_softc *, int);
     int    iwm_resume(struct iwm_softc *);
+
+
     
     
     
@@ -403,6 +410,13 @@ public:
     UInt8 pmPCICapPtr;
     bool magicPacketEnabled;
     bool magicPacketSupported;
+    
+    //Kernel control
+    errno_t EPHandleSet(kern_ctl_ref, unsigned int, void *, int, void *, size_t);
+    errno_t EPHandleGet(kern_ctl_ref, unsigned int, void *, int, void *, size_t *);
+    errno_t EPHandleConnect(kern_ctl_ref, struct sockaddr_ctl *, void **);
+    errno_t EPHandleDisconnect(kern_ctl_ref, unsigned int, void *);
+    errno_t EPHandleWrite(kern_ctl_ref, unsigned int, void *, mbuf_t, int);
 };
 
 struct ResourceCallbackContext

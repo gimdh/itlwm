@@ -16,7 +16,9 @@
 #include "itlwm.hpp"
 #include "types.h"
 #include "kernel.h"
+#include "static_wrapper.hpp"
 
+#include <os/log.h>
 #include <IOKit/IOInterruptController.h>
 #include <IOKit/IOCommandGate.h>
 #include <IOKit/network/IONetworkMedium.h>
@@ -246,38 +248,23 @@ bool itlwm::start(IOService *provider)
     }
     _fWorkloop->addEventSource(watchdogTimer);
     setLinkStatus(kIONetworkLinkValid);
-    OSObject *wifiEntryObject = NULL;
-    OSDictionary *wifiEntry = NULL;
-    char ssid[255];
-    char password[255];
-    OSString *entryKey = NULL;
-    OSDictionary *wifiDict = OSDynamicCast(OSDictionary, getProperty("WiFiConfig"));
-    if (wifiDict != NULL) {
-        OSCollectionIterator *iterator = OSCollectionIterator::withCollection(wifiDict);
-        while ((wifiEntryObject = iterator->getNextObject())) {
-            entryKey = OSDynamicCast(OSString, wifiEntryObject);
-            if (entryKey == NULL) {
-                continue;
-            }
-            wifiEntry = OSDynamicCast(OSDictionary, wifiDict->getObject(entryKey));
-            if (wifiEntry == NULL) {
-                continue;
-            }
-            OSString *ssidObj = OSDynamicCast(OSString, wifiEntry->getObject("ssid"));
-            OSString *pwdObj = OSDynamicCast(OSString, wifiEntry->getObject("password"));
-            if (ssidObj == NULL || pwdObj == NULL || ssidObj->isEqualTo("")) {
-                continue;
-            }
-            bzero(ssid, sizeof(ssid));
-            bzero(password, sizeof(password));
-            trim(ssidObj->getCStringNoCopy(), (char *)&ssid);
-            trim(pwdObj->getCStringNoCopy(), (char *)&password);
-            
-            XYLog("%s [%s] [%s]\n", __FUNCTION__, ssid, password);
-            joinSSID(ssid, password);
-        }
-        iterator->release();
-    }
+    
+    KernConHandler::set_instance(this);
+    errno_t error;
+    struct kern_ctl_reg ep_ctl; // Initialize control
+    kern_ctl_ref     kctlref;
+    bzero(&ep_ctl, sizeof(ep_ctl));  // sets ctl_unit to 0
+    ep_ctl.ctl_id = 0; /* OLD STYLE: ep_ctl.ctl_id = kEPCommID; */
+    ep_ctl.ctl_unit = 0;
+    strcpy(ep_ctl.ctl_name, "org.zxystd.itlwm.control");
+    ep_ctl.ctl_flags = CTL_FLAG_PRIVILEGED & CTL_FLAG_REG_ID_UNIT;
+    ep_ctl.ctl_send = KernConHandler::EPHandleWrite;
+    ep_ctl.ctl_getopt = KernConHandler::EPHandleGet;
+    ep_ctl.ctl_setopt = KernConHandler::EPHandleSet;
+    ep_ctl.ctl_connect = KernConHandler::EPHandleConnect;
+    ep_ctl.ctl_disconnect = KernConHandler::EPHandleDisconnect;
+    error = ctl_register(&ep_ctl, &kctlref);
+
     registerService();
     fNetIf->registerService();
     return true;
@@ -565,4 +552,62 @@ IOReturn itlwm::tsleepHandler(OSObject* owner, void* arg0, void* arg1, void* arg
 IOReturn itlwm::getMaxPacketSize(UInt32 *maxSize) const {
     *maxSize = ETHERNET_MTU + 18;
     return kIOReturnSuccess;
+}
+
+
+//Kernel connector
+errno_t itlwm::EPHandleSet( kern_ctl_ref ctlref, unsigned int unit, void *userdata, int opt, void *data, size_t len )
+{
+    int error = EINVAL;
+
+    switch (opt)
+    {
+        case COM_JOIN: {               // program defined symbol
+            error = 0;
+            os_log(OS_LOG_DEFAULT, "Got Join signal");
+            
+            ieee80211_del_ess(&(com.sc_ic), NULL, 0, 1);
+            
+            struct connection_data *con_data = (struct connection_data *)data;
+            os_log(OS_LOG_DEFAULT, "SSID: %s, Passwd: %s", con_data->ssid, con_data->passwd);
+            itlwm::joinSSID(con_data->ssid, con_data->passwd);
+            
+            break;
+        }
+        case COM_DISCON: {
+            error = 0;
+            os_log(OS_LOG_DEFAULT, "Got Disconnect signal");
+            ieee80211_del_ess(&(com.sc_ic), NULL, 0, 1);
+            break;
+        }
+    }
+
+    return error;
+
+}
+
+
+/* A simple A simple getsockopt handler */
+errno_t itlwm::EPHandleGet(kern_ctl_ref ctlref, unsigned int unit, void *userdata, int opt, void *data, size_t *len)
+{
+    int    error = EINVAL;
+
+    return error;
+}
+
+errno_t itlwm::EPHandleConnect(kern_ctl_ref ctlref, struct sockaddr_ctl *sac, void **unitinfo)
+{
+    return (0);
+}
+
+/* A minimalist disconnect handler */
+errno_t itlwm::EPHandleDisconnect(kern_ctl_ref ctlref, unsigned int unit, void *unitinfo)
+{
+    return (0);
+}
+
+/* A minimalist write handler */
+errno_t itlwm::EPHandleWrite(kern_ctl_ref ctlref, unsigned int unit, void *userdata, mbuf_t m, int flags)
+{
+    return (0);
 }
