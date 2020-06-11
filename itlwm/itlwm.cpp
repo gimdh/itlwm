@@ -590,8 +590,39 @@ errno_t itlwm::EPHandleSet( kern_ctl_ref ctlref, unsigned int unit, void *userda
 /* A simple A simple getsockopt handler */
 errno_t itlwm::EPHandleGet(kern_ctl_ref ctlref, unsigned int unit, void *userdata, int opt, void *data, size_t *len)
 {
+    static struct node_data_ary node_data_ary;
     int    error = EINVAL;
+    
 
+    switch (opt)
+    {
+        case COM_GETLIST: {
+            error = 0;
+            
+            struct ieee80211_node *ni, *nextbs;
+            struct ieee80211com *ic = &com.sc_ic;
+            
+            ni = RB_MIN(ieee80211_tree, &ic->ic_tree);
+            
+            int ary_len = 0;
+            struct node_data *nd = node_data_ary.node;
+            
+            for (; ni != NULL; ni = nextbs, ary_len++, nd++) {
+                nextbs = RB_NEXT(ieee80211_tree, &ic->ic_tree, ni);
+                strcpy(nd->essid, (char *)ni->ni_essid);
+                strcpy(nd->bssid, ether_sprintf(ni->ni_bssid));
+                nd->rssi = ni->ni_rssi;
+            }
+            
+            node_data_ary.len = ary_len;
+            
+            memcpy(data, &node_data_ary, sizeof(struct node_data_ary));
+            *len = sizeof(struct node_data_ary);
+            
+            break;
+        }
+    }
+    
     return error;
 }
 
